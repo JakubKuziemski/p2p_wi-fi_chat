@@ -22,13 +22,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -121,12 +115,12 @@ public class MainActivity extends AppCompatActivity {
                 manager.connect(channel, config, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
-                        Toast.makeText(getApplicationContext(),"Connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this,"Connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
                     public void onFailure(int reason) {
-                        Toast.makeText(getApplicationContext(),"Not connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this,"Not connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -200,11 +194,11 @@ public class MainActivity extends AppCompatActivity {
 
             if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
                 connectionStatus.setText("Host");
-                serverClass = new ServerClass();
+                serverClass = new ServerClass(MainActivity.this);
                 serverClass.start();
             } else if(wifiP2pInfo.groupFormed){
                 connectionStatus.setText("Client");
-                clientClass = new ClientClass(groupOwnerAddress);
+                clientClass = new ClientClass(MainActivity.this, groupOwnerAddress);
                 clientClass.start();
             }
         }
@@ -222,83 +216,4 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(broadcastReceiver);
     }
 
-    public class ServerClass extends Thread{
-        Socket socket;
-        ServerSocket serverSocket;
-
-        @Override
-        public void run() {
-            try {
-                serverSocket = new ServerSocket(8888);
-                socket = serverSocket.accept();
-                sendReceive = new SendReceive(socket);
-                sendReceive.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-    }
-
-    private class SendReceive extends Thread{
-        private Socket socket;
-        private InputStream inputStream;
-        private OutputStream outputStream;
-
-        public SendReceive(Socket skt){
-            socket = skt;
-            try {
-                inputStream = socket.getInputStream();
-                outputStream = socket.getOutputStream();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public void run() {
-            byte[] buffer = new byte[1024];
-            int bytes;
-
-            while (socket != null){
-                try {
-                    bytes = inputStream.read(buffer);
-                    if(bytes > 0){
-                        handler.obtainMessage(MESSAGE_READ, bytes, -1, buffer).sendToTarget();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        public void write(byte[] bytes){
-            try {
-                outputStream.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public class ClientClass extends Thread{
-        Socket socket;
-        String hostAdd;
-
-        public ClientClass(InetAddress hostAddress){
-            hostAdd = hostAddress.getHostAddress();
-            socket = new Socket();
-        }
-
-        @Override
-        public void run() {
-            try {
-                socket.connect(new InetSocketAddress(hostAdd, 8888), 500);
-                sendReceive = new SendReceive(socket);
-                sendReceive.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }
