@@ -22,13 +22,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,49 +30,87 @@ import static android.view.View.*;
 
 public class MainActivity extends AppCompatActivity {
 
-    Button btnOnOff, btnDiscover, btnSend;
-    ListView listView;
-    TextView read_msg_box, connectionStatus;
-    EditText writeMsg;
+    private Button btnOnOff, btnDiscover, btnSend;
+    private ListView listView;
+    private TextView readMsgBox;
+    private EditText writeMsg;
 
-    WifiManager wifiManager;
-    WifiP2pManager manager;
-    WifiP2pManager.Channel channel;
+    private WifiManager wifiManager;
+    private WifiP2pManager manager;
+    private WifiP2pManager.Channel channel;
 
-    BroadcastReceiver broadcastReceiver;
-    IntentFilter intentFilter;
+    private BroadcastReceiver broadcastReceiver;
+    private IntentFilter intentFilter;
 
-    List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
-    String[] deviceNameArray;
-    WifiP2pDevice[] deviceArray;
+    private List<WifiP2pDevice> devices = new ArrayList<>();
+    private String[] deviceNameArray;
+    private WifiP2pDevice[] deviceArray;
 
-    static final int MESSAGE_READ = 1;
+    private ServerClass serverClass;
+    private ClientClass clientClass;
 
-    ServerClass serverClass;
-    ClientClass clientClass;
-    SendReceive sendReceive;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        initialWork();
-        exqListener();
-    }
-
-    Handler handler = new Handler(new Handler.Callback() {
+    protected SendReceive sendReceive;
+    protected TextView connectionStatus;
+    protected static final int MESSAGE_READ = 1;
+    protected Handler handler = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
             switch(msg.what) {
                 case MESSAGE_READ:
                     byte[] readBuff = (byte[]) msg.obj;
                     String tempMsg = new String(readBuff, 0, msg.arg1);
-                    read_msg_box.setText(tempMsg);
+                    readMsgBox.setText(tempMsg);
                     break;
             }
             return true;
         }
     });
+
+    protected WifiP2pManager.PeerListListener peerListListener = new WifiP2pManager.PeerListListener() {
+        @Override
+        public void onPeersAvailable(WifiP2pDeviceList peerList) {
+            if(!peerList.getDeviceList().equals(devices)){
+                devices.clear();
+                devices.addAll(peerList.getDeviceList());
+
+                deviceNameArray = new String[peerList.getDeviceList().size()];
+                deviceArray = new WifiP2pDevice[peerList.getDeviceList().size()];
+                int index = 0;
+
+
+                for(WifiP2pDevice device : peerList.getDeviceList()){
+                    deviceNameArray[index] = device.deviceName + " " + device.deviceAddress;
+                    deviceArray[index] = device;
+                    index++;
+                }
+
+                ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), android.R.layout.simple_list_item_1, deviceNameArray);
+                listView.setAdapter(adapter);
+
+                if(devices.size() == 0){
+                    Toast.makeText(getApplicationContext(), "No Device Found", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        }
+    };
+
+    protected WifiP2pManager.ConnectionInfoListener connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
+        @Override
+        public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
+            final InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
+
+            if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
+                connectionStatus.setText("Host");
+                serverClass = new ServerClass(MainActivity.this);
+                serverClass.start();
+            } else if(wifiP2pInfo.groupFormed){
+                connectionStatus.setText("Client");
+                clientClass = new ClientClass(MainActivity.this, groupOwnerAddress);
+                clientClass.start();
+            }
+        }
+    };
 
     private void exqListener() {
         btnOnOff.setOnClickListener(new OnClickListener(){
@@ -146,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
         btnDiscover = findViewById(R.id.discover);
         btnSend = findViewById(R.id.sendButton);
         listView = findViewById(R.id.peerListView);
-        read_msg_box = findViewById(R.id.readMsg);
+        readMsgBox = findViewById(R.id.readMsg);
         connectionStatus = findViewById(R.id.connectionStatus);
         writeMsg = findViewById(R.id.writeMsg);
 
@@ -164,51 +196,13 @@ public class MainActivity extends AppCompatActivity {
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
     }
 
-    WifiP2pManager.PeerListListener peerListListener = new WifiP2pManager.PeerListListener() {
-        @Override
-        public void onPeersAvailable(WifiP2pDeviceList peerList) {
-                  if(!peerList.getDeviceList().equals(peers)){
-                      peers.clear();
-                      peers.addAll(peerList.getDeviceList());
-
-                      deviceNameArray = new String[peerList.getDeviceList().size()];
-                      deviceArray = new WifiP2pDevice[peerList.getDeviceList().size()];
-                      int index = 0;
-
-
-                      for(WifiP2pDevice device : peerList.getDeviceList()){
-                          deviceNameArray[index] = device.deviceName + " " + device.deviceAddress;
-                          deviceArray[index] = device;
-                          index++;
-                      }
-
-                      ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), android.R.layout.simple_list_item_1, deviceNameArray);
-                      listView.setAdapter(adapter);
-
-                      if(peers.size() == 0){
-                          Toast.makeText(getApplicationContext(), "No Device Found", Toast.LENGTH_SHORT).show();
-                          return;
-                      }
-                  }
-        }
-    };
-
-    WifiP2pManager.ConnectionInfoListener connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
-        @Override
-        public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
-            final InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
-
-            if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
-                connectionStatus.setText("Host");
-                serverClass = new ServerClass();
-                serverClass.start();
-            } else if(wifiP2pInfo.groupFormed){
-                connectionStatus.setText("Client");
-                clientClass = new ClientClass(groupOwnerAddress);
-                clientClass.start();
-            }
-        }
-    };
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        initialWork();
+        exqListener();
+    }
 
     @Override
     protected void onResume() {
@@ -222,83 +216,4 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(broadcastReceiver);
     }
 
-    public class ServerClass extends Thread{
-        Socket socket;
-        ServerSocket serverSocket;
-
-        @Override
-        public void run() {
-            try {
-                serverSocket = new ServerSocket(8888);
-                socket = serverSocket.accept();
-                sendReceive = new SendReceive(socket);
-                sendReceive.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-    }
-
-    private class SendReceive extends Thread{
-        private Socket socket;
-        private InputStream inputStream;
-        private OutputStream outputStream;
-
-        public SendReceive(Socket skt){
-            socket = skt;
-            try {
-                inputStream = socket.getInputStream();
-                outputStream = socket.getOutputStream();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public void run() {
-            byte[] buffer = new byte[1024];
-            int bytes;
-
-            while (socket != null){
-                try {
-                    bytes = inputStream.read(buffer);
-                    if(bytes > 0){
-                        handler.obtainMessage(MESSAGE_READ, bytes, -1, buffer).sendToTarget();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        public void write(byte[] bytes){
-            try {
-                outputStream.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public class ClientClass extends Thread{
-        Socket socket;
-        String hostAdd;
-
-        public ClientClass(InetAddress hostAddress){
-            hostAdd = hostAddress.getHostAddress();
-            socket = new Socket();
-        }
-
-        @Override
-        public void run() {
-            try {
-                socket.connect(new InetSocketAddress(hostAdd, 8888), 500);
-                sendReceive = new SendReceive(socket);
-                sendReceive.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }
