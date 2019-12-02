@@ -18,6 +18,7 @@ public class ServerClass extends Thread{
         try {
             serverSocket = new ServerSocket(8888);
             socket = serverSocket.accept();
+
             mainActivity.sendReceive = new SendReceive(mainActivity, socket);
             mainActivity.sendReceive.start();
         } catch (IOException e) {

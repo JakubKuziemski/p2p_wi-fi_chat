@@ -22,6 +22,8 @@ public class SendReceive extends Thread{
         }
     }
 
+    //rozdzoielic na 2 klasy jedna wysyla druga odbiera
+
     @Override
     public void run() {
         byte[] buffer = new byte[1024];

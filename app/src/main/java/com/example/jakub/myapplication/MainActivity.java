@@ -36,13 +36,13 @@ public class MainActivity extends AppCompatActivity {
     EditText writeMsg;
 
     WifiManager wifiManager;
-    WifiP2pManager manager;
+    WifiP2pManager p2pManager;
     WifiP2pManager.Channel channel;
 
     BroadcastReceiver broadcastReceiver;
     IntentFilter intentFilter;
 
-    List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
+    List<WifiP2pDevice> devices = new ArrayList<WifiP2pDevice>();
     String[] deviceNameArray;
     WifiP2pDevice[] deviceArray;
 
@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
         btnDiscover.setOnClickListener(new OnClickListener(){
             @Override
             public void onClick(View view){
-                manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                p2pManager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
 
@@ -112,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
                 WifiP2pConfig config = new WifiP2pConfig();
                 config.deviceAddress = device.deviceAddress;
 
-                manager.connect(channel, config, new WifiP2pManager.ActionListener() {
+                p2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
                         Toast.makeText(MainActivity.this,"Connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
@@ -146,10 +146,10 @@ public class MainActivity extends AppCompatActivity {
 
         wifiManager = (WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
-        manager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
-        channel = manager.initialize(this, getMainLooper(), null);
+        p2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+        channel = p2pManager.initialize(this, getMainLooper(), null);
 
-        broadcastReceiver = new WiFiDirectBroadcastReceiver(manager, channel, this);
+        broadcastReceiver = new WiFiDirectBroadcastReceiver(p2pManager, channel, this);
 
         intentFilter = new IntentFilter();
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
@@ -161,9 +161,9 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pManager.PeerListListener peerListListener = new WifiP2pManager.PeerListListener() {
         @Override
         public void onPeersAvailable(WifiP2pDeviceList peerList) {
-                  if(!peerList.getDeviceList().equals(peers)){
-                      peers.clear();
-                      peers.addAll(peerList.getDeviceList());
+                  if(!peerList.getDeviceList().equals(devices)){
+                      devices.clear();
+                      devices.addAll(peerList.getDeviceList());
 
                       deviceNameArray = new String[peerList.getDeviceList().size()];
                       deviceArray = new WifiP2pDevice[peerList.getDeviceList().size()];
@@ -179,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
                       ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), android.R.layout.simple_list_item_1, deviceNameArray);
                       listView.setAdapter(adapter);
 
-                      if(peers.size() == 0){
+                      if(devices.size() == 0){
                           Toast.makeText(getApplicationContext(), "No Device Found", Toast.LENGTH_SHORT).show();
                           return;
                       }
